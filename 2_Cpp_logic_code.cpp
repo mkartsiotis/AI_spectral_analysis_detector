@@ -1,0 +1,320 @@
+#include "eigen/Eigen/Dense"
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+using namespace std;
+// Global variables:
+const string unsuccessful_line = "!@!@*&*&^%^%";
+const string stop_line = "%%%%";
+
+class File
+{
+  private:
+    string EXPORT_FILE_NAME;
+    ifstream in_File;
+    ofstream out_File;
+
+  public:
+    File(string FILENAME = "AI_Sample.txt") // Default filename: test.txt
+    {
+        // Open the input_file
+        in_File.open(FILENAME);
+        cout << FILENAME << endl;
+        if (!in_File.is_open())
+        {
+            cout << "IMPORT FILE DOES NOT EXIST. TERMINATING PROCEDURE" << endl;
+            exit(EXIT_FAILURE);
+        }
+        if (FILENAME.length() > 4)
+        {
+            FILENAME.erase(FILENAME.length() - 4);
+            EXPORT_FILE_NAME = "results_" + FILENAME + ".csv";
+        }
+        else
+        {
+            cout << "INVALID FILENAME!EXITING" << endl;
+            exit(EXIT_FAILURE);
+        }
+
+        cout << "EXPORTED CSV FILE NAME: " << EXPORT_FILE_NAME;
+        // Create an export file:
+        out_File.open(EXPORT_FILE_NAME);
+        return_in_file_cursor_to_beginning();
+    }
+    // Destructor to close the files.
+    ~File()
+    {
+        if (in_File.is_open())
+            in_File.close();
+        if (out_File.is_open())
+            out_File.close();
+    }
+    // Functions we are going to use:
+    bool in_file_eof() const
+    {
+        return in_File.eof();
+    }
+    // Output
+    void init_out_file_contents(void);
+    void return_out_file_cursor_to_beginning(void);
+    void write_data_to_out_file(string src, unsigned int map_size, unsigned int word_count, double fiedler_val,
+                                double eigen_value_3, double eigen_value_4, double spectral_gap);
+    // Input
+    void return_in_file_cursor_to_beginning(void);
+    string return_line(); // Returns a tokenized word.
+    streampos tell_pos(void)
+    {
+        return in_File.tellg();
+    }
+    void go_to_pos(streampos pos)
+    {
+        if (in_File.eof())
+        {
+            in_File.clear();
+        }
+        in_File.seekg(pos);
+    }
+};
+// Class used for A.Tokenization B.Creation of unordered map.
+class Word_processor
+{
+  private:
+    unordered_map<string, int> Block_Map;
+    unsigned int unordered_map_index = 0;
+    const string delimiters = ".?-,!: ";
+    size_t Map_Size;
+    size_t word_count = 0;
+
+  public:
+    // Mutator
+    void Set_Map_Size(size_t s)
+    {
+        Map_Size = s;
+    }
+    // Accessor
+    unordered_map<string, int> &getMap() // Inline declaration
+    {
+        return Block_Map;
+    }
+    unsigned int get_unordered_map_index(void) const
+    {
+        return unordered_map_index;
+    }
+    string getDelimiters(void) const
+    {
+        return delimiters;
+    }
+    size_t get_Map_Size(void) const
+    {
+        return Map_Size;
+    }
+    size_t get_word_count(void) const
+    {
+        return word_count;
+    }
+    streampos fill_Map(File &in_File); // Reads the file and fills the map based on the block.
+    void clear(void)
+    {
+        Block_Map.clear();
+        unordered_map_index = 0;
+        word_count = 0;
+        Map_Size = 0;
+    }
+};
+
+class Matrix
+{
+  private:
+    Eigen::MatrixXd A;
+    Eigen::MatrixXd Laplacian;
+    unsigned int MATRIX_SIZE;
+
+  public:
+    // Constructor to create the matrix in dynamic memory. We are using the eigen matrices for speed.
+    Matrix(unsigned int s) : MATRIX_SIZE(s), A(Eigen::MatrixXd::Zero(s, s)), Laplacian(Eigen::MatrixXd::Zero(s, s))
+    {
+    }
+    // Accessors
+    size_t getSize()
+    {
+        return MATRIX_SIZE;
+    }
+    // Operations
+    void fill_Matrix(Word_processor &wp, File &in_File); // Fills the matrix based on unordered map.
+    void find_Laplacian(void);
+    double get_eigen_value(int eigenvalue_index) const;
+};
+
+int main(void)
+{
+    File MyFile("AI_Sample.txt");
+    MyFile.init_out_file_contents();
+    Word_processor wp;
+    streampos file_pos = streampos(0), prev_stop_pos = streampos(0);
+    while (file_pos != -1)
+    {
+        file_pos = wp.fill_Map(MyFile);
+        Matrix M(wp.get_Map_Size());
+        MyFile.go_to_pos(prev_stop_pos); // Return the cursor to the end of the previous top position
+        M.fill_Matrix(wp, MyFile);
+        M.find_Laplacian();
+        double l2 = M.get_eigen_value(2);
+        double l3 = M.get_eigen_value(3);
+        double l4 = M.get_eigen_value(4);
+        MyFile.write_data_to_out_file("AI", M.getSize(), wp.get_word_count(), l2, l3, l4, l3 - l2);
+        prev_stop_pos = file_pos;
+        wp.clear();
+    }
+    return 0;
+}
+
+// Functions:
+// Files Class:
+void File::init_out_file_contents(void)
+{
+    out_File << "Source,Words,Nodes,Fiedler(λ2),λ3,λ4,spectral gap" << endl;
+}
+void File::return_out_file_cursor_to_beginning(void)
+{
+    if (out_File.eof())
+    {
+        out_File.clear();
+    }
+    out_File.seekp(0, std::ios::beg);
+}
+void File::write_data_to_out_file(string src, unsigned int map_size, unsigned int word_count, double fiedler_val,
+                                  double eigen_value_3, double eigen_value_4, double spectral_gap)
+{
+    out_File << src << "," << word_count << "," << map_size << "," << fiedler_val << "," << eigen_value_3 << ","
+             << eigen_value_4 << "," << spectral_gap << endl;
+}
+// Input
+void File::return_in_file_cursor_to_beginning(void)
+{
+    if (in_File.eof())
+    {
+        in_File.clear();
+    }
+    in_File.seekg(0, std::ios::beg);
+}
+string File::return_line() // Returns a tokenized word.
+{
+    string myLine;
+    if (getline(in_File, myLine))
+    {
+        if (!myLine.empty() && myLine.back() == '\r')
+            myLine.pop_back();
+        return myLine;
+    }
+    else
+        return unsuccessful_line;
+}
+// Word processor class:
+streampos Word_processor::fill_Map(File &in_File) // Reads the file and fills the map based on the block.
+{
+    streampos return_position;
+    string line = in_File.return_line();
+    while (line != unsuccessful_line && line != stop_line)
+    {
+        unsigned int line_index = 0;
+        while (line_index < line.length())
+        {
+            string word = "";
+            while (line_index < line.length() && delimiters.find(line[line_index]) == string::npos)
+            {
+                line[line_index] = tolower(line[line_index]);
+                word += line[line_index];
+                line_index++;
+            }
+            while (line_index < line.length() && delimiters.find(line[line_index]) != string::npos)
+                line_index++;
+
+            // Add word to map
+            if (!word.empty() && Block_Map.find(word) == Block_Map.end())
+            {
+                Block_Map[word] = unordered_map_index;
+                unordered_map_index++;
+            }
+            if (!word.empty())
+                word_count++;
+        }
+
+        line = in_File.return_line();
+    }
+    if (line == stop_line)
+    {
+        return_position = in_File.tell_pos();
+        cout << "\nFOUND BARRIER AND CUT!\n" << endl;
+    }
+    else
+    {
+        cout << "\nREACHED EOF\n";
+        return_position = -1;
+    }
+    // Set map size
+    Map_Size = unordered_map_index;
+    return return_position;
+}
+
+// Matrix
+void Matrix::fill_Matrix(Word_processor &wp, File &in_File) // Fills the matrix based on unordered map.
+{
+    string line = in_File.return_line();
+    string prev_word_1 = "", prev_word_2 = "";
+    size_t word_cnt = 1;
+    while (line != unsuccessful_line && line != stop_line)
+    {
+        unsigned int line_index = 0;
+        while (line_index < line.length())
+        {
+            string word = "";
+            while (line_index < line.length() && wp.getDelimiters().find(line[line_index]) == string::npos)
+            {
+                line[line_index] = tolower(line[line_index]);
+                word += line[line_index];
+                line_index++;
+            }
+            while (line_index < line.length() && wp.getDelimiters().find(line[line_index]) != string::npos)
+                line_index++;
+            if (word_cnt > 2)
+            {
+                // 1.Get map value
+                // 2.Increase the value of word.
+                int next_next_word_index = wp.getMap()[word];
+                int next_word_index = wp.getMap()[prev_word_1];
+                int current_word_index = wp.getMap()[prev_word_2];
+                A(current_word_index, next_next_word_index)++;
+                A(next_next_word_index, current_word_index)++;
+                A(current_word_index, next_word_index) += 2;
+                A(next_word_index, current_word_index) += 2;
+            }
+            prev_word_2 = prev_word_1;
+            prev_word_1 = word;
+            word_cnt++;
+        }
+        line = in_File.return_line();
+    }
+}
+
+void Matrix::find_Laplacian(void)
+{
+    for (size_t i = 0; i < MATRIX_SIZE; i++)
+    {
+        int degree = 0;
+        for (size_t j = 0; j < MATRIX_SIZE; j++)
+        {
+            if (i != j)
+                degree += A(i, j);
+            Laplacian(i, j) = -A(i, j);
+        }
+        Laplacian(i, i) = degree;
+    }
+}
+double Matrix::get_eigen_value(int eigenvalue_index) const
+{
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> solver(Laplacian);
+    double eigen_val = solver.eigenvalues()(eigenvalue_index - 1); // 0 indexed
+    return eigen_val;
+}
