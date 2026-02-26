@@ -81,12 +81,6 @@ int main(void)
 
             while (delimiters.find(myLine[line_index]) != string::npos && line_index < myLine.length())
                 line_index++;
-            // Add word to unordered map.If the word is not there add it
-            if (Text_Unordered_Map.find(word) == Text_Unordered_Map.end())
-            {
-                Text_Unordered_Map[word] = unordered_map_index;
-                unordered_map_index++;
-            }
             if (unordered_map_index > 1)
             {
                 // 1.Get map value
