@@ -157,4 +157,3 @@ Contributions are welcome! If you'd like to improve the signal preprocessing tec
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
-oject Link: [https://github.com/mkartsiotis/AI_spectral_analysis_detector](https://github.com/mkartsiotis/AI_spectral_analysis_detector)
