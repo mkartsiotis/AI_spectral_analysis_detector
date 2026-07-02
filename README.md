@@ -129,13 +129,6 @@ Below is a summary of the model's performance on the validation/test benchmark s
 | **Recall (Sensitivity)** | 0.9X |
 | **F1-Score** | 0.9X |
 
-*(Optional: Add an image of your loss curve or confusion matrix below)*
-
-```text
-[Insert Confusion Matrix or Spectral Attention Plot Here]
-
-```
-
 ---
 
 ## 🤝 Contributing
